@@ -14,11 +14,26 @@ public class ArmTracker : MonoBehaviour
 
     [Header("Weight Input")]
     public TMP_InputField weightInput;
-    public float handWeight = 0f; // Weight in kg
+    public float handWeight = 0f; // Weight/resistance in kg
 
     [Header("Arm Properties")]
-    public float armMass = 0.10f; // PASCO model forearm mass (CORRECTED from 2.0 kg)
+    public float armMass = 2.0f; // Mass of forearm in kg
+
+    [Header("Muscle Insertion Distances")]
+    [Tooltip("Distance from elbow where biceps inserts (front of forearm)")]
     public float bicepInsertionDistance = 0.05f; // 5cm from elbow
+
+    [Tooltip("Distance from elbow where triceps inserts (olecranon, back of elbow)")]
+    public float tricepInsertionDistance = 0.02f; // 2cm behind elbow (olecranon)
+
+    [Header("Muscle Mode")]
+    public MuscleMode currentMuscleMode = MuscleMode.Biceps;
+
+    public enum MuscleMode
+    {
+        Biceps,   // Lifting weight against gravity (curl)
+        Triceps   // Pushing down against cable tension (pulldown)
+    }
 
     [Header("Smoothing")]
     public float smoothingFactor = 0.3f;
@@ -28,7 +43,7 @@ public class ArmTracker : MonoBehaviour
     private Vector3 elbowPos;
     private Vector3 handPos;
 
-    // Smoothed positions (for visualization)
+    // Smoothed positions
     private Vector3 smoothedShoulderPos;
     private Vector3 smoothedElbowPos;
     private Vector3 smoothedHandPos;
@@ -41,21 +56,32 @@ public class ArmTracker : MonoBehaviour
     private float elbowAngle;
     private float upperArmLength;
     private float forearmLength;
-    private float torqueAtElbow;
-    private float requiredMuscleForce;
-    private float handMomentArm;    // NEW: Store for getters
-    private float forearmMomentArm; // NEW: Store for getters
 
-    private const float GRAVITY = 9.81f; // m/s²
+    // Torque values
+    private float torqueFromResistance;      // Torque from hand weight/cable
+    private float torqueFromForearmWeight;   // Torque from forearm mass (always gravity)
+    private float totalLoadTorque;
+    private float requiredMuscleTorque;
+    private float requiredMuscleForce;
+
+    // Moment arms
+    private float handMomentArm;
+    private float forearmMomentArm;
+    private float muscleMomentArm;
+
+    // Directions and positions for visualization
+    private Vector3 muscleForceDirection;
+    private Vector3 muscleInsertionPoint;
+    private Vector3 resistanceForceDirection; // DOWN for biceps (gravity), UP for triceps (cable)
+
+    private const float GRAVITY = 9.81f;
 
     void Start()
     {
-        // Subscribe to tracking events
         shoulderTarget.OnTargetStatusChanged += OnShoulderStatusChanged;
         elbowTarget.OnTargetStatusChanged += OnElbowStatusChanged;
         handTarget.OnTargetStatusChanged += OnHandStatusChanged;
 
-        // Initialize smoothed positions
         smoothedShoulderPos = Vector3.zero;
         smoothedElbowPos = Vector3.zero;
         smoothedHandPos = Vector3.zero;
@@ -63,7 +89,6 @@ public class ArmTracker : MonoBehaviour
 
     void Update()
     {
-        // Update positions if tracked (with smoothing)
         if (shoulderTracked)
         {
             shoulderPos = shoulderTarget.transform.position;
@@ -82,7 +107,6 @@ public class ArmTracker : MonoBehaviour
             smoothedHandPos = Vector3.Lerp(smoothedHandPos, handPos, 1f - smoothingFactor);
         }
 
-        // Calculate physics (if all points are tracked)
         if (shoulderTracked && elbowTracked && handTracked)
         {
             CalculateArmPhysics();
@@ -93,76 +117,132 @@ public class ArmTracker : MonoBehaviour
 
     void CalculateArmPhysics()
     {
-        // Use smoothed positions for calculations
         upperArmLength = Vector3.Distance(smoothedShoulderPos, smoothedElbowPos);
         forearmLength = Vector3.Distance(smoothedElbowPos, smoothedHandPos);
 
-        // Calculate elbow angle
         Vector3 upperArmDir = (smoothedElbowPos - smoothedShoulderPos).normalized;
         Vector3 forearmDir = (smoothedHandPos - smoothedElbowPos).normalized;
         elbowAngle = Vector3.Angle(upperArmDir, forearmDir);
 
-        // Calculate forces and torques
-        CalculateForces();
+        CalculateTorqueBalance();
     }
 
-    void CalculateForces()
+    void CalculateTorqueBalance()
     {
-        // Weight forces
-        float handWeightForce = handWeight * GRAVITY; // in Newtons
+        Vector3 elbow = smoothedElbowPos;
+        Vector3 hand = smoothedHandPos;
+        Vector3 shoulder = smoothedShoulderPos;
+        Vector3 forearmCenter = (elbow + hand) / 2f;
+
+        Vector3 forearmDir = (hand - elbow).normalized;
+        Vector3 upperArmDir = (shoulder - elbow).normalized;
+
+        // Set resistance direction based on exercise type
+        if (currentMuscleMode == MuscleMode.Biceps)
+        {
+            resistanceForceDirection = Vector3.down; // Gravity on dumbbell
+        }
+        else
+        {
+            resistanceForceDirection = Vector3.up; // Cable tension
+        }
+
+        // Calculate muscle insertion point and force direction
+        if (currentMuscleMode == MuscleMode.Biceps)
+        {
+            muscleInsertionPoint = elbow + forearmDir * bicepInsertionDistance;
+            muscleForceDirection = (shoulder - muscleInsertionPoint).normalized;
+        }
+        else
+        {
+            Vector3 backDirection = -forearmDir;
+            muscleInsertionPoint = elbow + backDirection * tricepInsertionDistance;
+            muscleForceDirection = (shoulder - muscleInsertionPoint).normalized;
+        }
+
+        // Moment arm calculations
+        Vector3 elbowToHand = hand - elbow;
+
+        if (currentMuscleMode == MuscleMode.Biceps)
+        {
+            handMomentArm = Mathf.Sqrt(elbowToHand.x * elbowToHand.x + elbowToHand.z * elbowToHand.z);
+        }
+        else
+        {
+            handMomentArm = Mathf.Sqrt(elbowToHand.x * elbowToHand.x + elbowToHand.z * elbowToHand.z);
+        }
+
+        Vector3 elbowToForearmCenter = forearmCenter - elbow;
+        forearmMomentArm = Mathf.Sqrt(elbowToForearmCenter.x * elbowToForearmCenter.x +
+                                       elbowToForearmCenter.z * elbowToForearmCenter.z);
+
+        // Muscle moment arm using cross product
+        Vector3 r_muscle = muscleInsertionPoint - elbow;
+        Vector3 crossProduct = Vector3.Cross(r_muscle, muscleForceDirection);
+        muscleMomentArm = crossProduct.magnitude;
+
+        // Torque calculations
+        float resistanceForce = handWeight * GRAVITY;
         float forearmWeightForce = armMass * GRAVITY;
 
-        // ═══════════════════════════════════════════════════════════════════
-        // CRITICAL FIX: Calculate TRUE moment arms (perpendicular distance)
-        // For vertical forces (gravity), moment arm = horizontal distance
-        // ═══════════════════════════════════════════════════════════════════
+        torqueFromResistance = resistanceForce * handMomentArm;
+        torqueFromForearmWeight = forearmWeightForce * forearmMomentArm;
 
-        // Hand moment arm: horizontal distance from elbow to hand
-        Vector3 handProjection = new Vector3(
-            smoothedHandPos.x,
-            smoothedElbowPos.y,
-            smoothedHandPos.z
-        );
-        handMomentArm = Vector3.Distance(smoothedElbowPos, handProjection);
+        // Total load torque depends on mode
+        if (currentMuscleMode == MuscleMode.Biceps)
+        {
+            // Both forces cause extension torque
+            totalLoadTorque = torqueFromResistance + torqueFromForearmWeight;
+        }
+        else
+        {
+            // Cable and gravity oppose each other
+            totalLoadTorque = torqueFromResistance - torqueFromForearmWeight;
+            totalLoadTorque = Mathf.Abs(totalLoadTorque);
+        }
 
-        // Forearm center of mass moment arm
-        Vector3 forearmCenter = (smoothedElbowPos + smoothedHandPos) / 2f;
-        Vector3 forearmProjection = new Vector3(
-            forearmCenter.x,
-            smoothedElbowPos.y,
-            forearmCenter.z
-        );
-        forearmMomentArm = Vector3.Distance(smoothedElbowPos, forearmProjection);
+        // Required muscle force
+        requiredMuscleTorque = totalLoadTorque;
 
-        // Torque = Force × Perpendicular Distance (moment arm)
-        float handTorque = handWeightForce * handMomentArm;
-        float forearmTorque = forearmWeightForce * forearmMomentArm;
+        if (muscleMomentArm > 0.001f)
+        {
+            requiredMuscleForce = requiredMuscleTorque / muscleMomentArm;
+        }
+        else
+        {
+            requiredMuscleForce = 0f;
+        }
 
-        torqueAtElbow = handTorque + forearmTorque;
-
-        // Calculate required muscle force (bicep)
-        // Bicep has very short moment arm = mechanical disadvantage
-        requiredMuscleForce = torqueAtElbow / bicepInsertionDistance;
-
-        Debug.Log($"Elbow Angle: {elbowAngle:F1}°");
-        Debug.Log($"Hand Moment Arm: {handMomentArm:F3} m");
-        Debug.Log($"Torque at Elbow: {torqueAtElbow:F2} N⋅m");
-        Debug.Log($"Required Muscle Force: {requiredMuscleForce:F2} N");
-        Debug.Log($"Mechanical Advantage: {GetMechanicalAdvantage():F3}");
+        Debug.Log($"Mode: {currentMuscleMode}");
+        Debug.Log($"Resistance Direction: {resistanceForceDirection}");
+        Debug.Log($"Muscle Moment Arm: {muscleMomentArm:F3}m");
+        Debug.Log($"Load Torque: {totalLoadTorque:F2} N⋅m");
+        Debug.Log($"Muscle Force: {requiredMuscleForce:F1} N");
     }
 
     public void OnWeightUpdated()
     {
-        // Called when user clicks "Update Forces" button
         if (float.TryParse(weightInput.text, out float weight))
         {
             handWeight = weight;
-            Debug.Log($"Weight updated to: {handWeight} kg");
+            Debug.Log($"Weight/Resistance updated to: {handWeight} kg");
         }
         else
         {
             Debug.LogWarning("Invalid weight input!");
         }
+    }
+
+    public void SetBicepsMode()
+    {
+        currentMuscleMode = MuscleMode.Biceps;
+        Debug.Log("Switched to BICEPS mode (curl - weight pulls DOWN)");
+    }
+
+    public void SetTricepsMode()
+    {
+        currentMuscleMode = MuscleMode.Triceps;
+        Debug.Log("Switched to TRICEPS mode (pulldown - cable pulls UP)");
     }
 
     void UpdateDebugText()
@@ -176,13 +256,15 @@ public class ArmTracker : MonoBehaviour
             string physicsInfo = "";
             if (shoulderTracked && elbowTracked && handTracked)
             {
-                float ma = GetMechanicalAdvantage();
-                physicsInfo = $"Elbow Angle: {elbowAngle:F1}°\n" +
-                             $"Weight: {handWeight:F1} kg\n" +
-                             $"Lever Arm: {handMomentArm:F2} m\n" +  // NEW
-                             $"Torque: {torqueAtElbow:F2} N⋅m\n" +
-                             $"Muscle Force: {requiredMuscleForce:F1} N\n" +
-                             $"Mech. Adv.: {ma:F2}";  // NEW
+                string modeName = currentMuscleMode == MuscleMode.Biceps ? "BICEPS (Curl)" : "TRICEPS (Pulldown)";
+                string resistanceType = currentMuscleMode == MuscleMode.Biceps ? "Weight ↓" : "Cable ↑";
+
+                physicsInfo = $"Mode: {modeName}\n" +
+                             $"Resistance: {resistanceType}\n" +
+                             $"Elbow Angle: {elbowAngle:F1}°\n" +
+                             $"Load: {handWeight:F1} kg\n" +
+                             $"Torque: {totalLoadTorque:F2} N⋅m\n" +
+                             $"Muscle Force: {requiredMuscleForce:F1} N";
             }
 
             debugText.text = trackingStatus + physicsInfo;
@@ -210,7 +292,6 @@ public class ArmTracker : MonoBehaviour
 
     void OnDestroy()
     {
-        // Unsubscribe from events
         if (shoulderTarget != null)
             shoulderTarget.OnTargetStatusChanged -= OnShoulderStatusChanged;
         if (elbowTarget != null)
@@ -219,36 +300,41 @@ public class ArmTracker : MonoBehaviour
             handTarget.OnTargetStatusChanged -= OnHandStatusChanged;
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // PUBLIC GETTERS (for visualization and educational displays)
-    // ═══════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════
+    // PUBLIC GETTERS FOR VISUALIZATION
+    // ════════════════════════════════════════════════════════════════
+
+    // Positions
     public Vector3 GetShoulderPos() => smoothedShoulderPos;
     public Vector3 GetElbowPos() => smoothedElbowPos;
     public Vector3 GetHandPos() => smoothedHandPos;
-    public float GetHandWeightForce() => handWeight * GRAVITY;
+
+    // Forces
+    public float GetResistanceForce() => handWeight * GRAVITY;
     public float GetForearmWeightForce() => armMass * GRAVITY;
     public float GetMuscleForce() => requiredMuscleForce;
-    public float GetElbowTorque() => torqueAtElbow;
-    public bool AllTracked() => shoulderTracked && elbowTracked && handTracked;
 
-    // NEW GETTERS for educational displays
+    // For backwards compatibility
+    public float GetHandWeightForce() => handWeight * GRAVITY;
+
+    // Torques
+    public float GetElbowTorque() => totalLoadTorque;
+    public float GetTorqueFromResistance() => torqueFromResistance;
+    public float GetTorqueFromForearmWeight() => torqueFromForearmWeight;
+
+    // Moment arms
     public float GetHandMomentArm() => handMomentArm;
     public float GetForearmMomentArm() => forearmMomentArm;
-    public float GetForearmLength() => forearmLength;
-    public float GetBicepInsertionDistance() => bicepInsertionDistance;
+    public float GetMuscleMomentArm() => muscleMomentArm;
 
-    public float GetMechanicalAdvantage()
-    {
-        if (handMomentArm <= 0) return 0;
-        return bicepInsertionDistance / handMomentArm;
-    }
+    // Muscle-specific
+    public Vector3 GetMuscleForceDirection() => muscleForceDirection;
+    public Vector3 GetMuscleInsertionPoint() => muscleInsertionPoint;
+    public MuscleMode GetCurrentMuscleMode() => currentMuscleMode;
 
-    // NEW: Get bicep insertion point for visualization
-    public Vector3 GetBicepInsertionPoint()
-    {
-        if (!AllTracked()) return smoothedElbowPos;
+    // NEW: Resistance direction (DOWN for biceps/gravity, UP for triceps/cable)
+    public Vector3 GetResistanceForceDirection() => resistanceForceDirection;
 
-        Vector3 forearmDir = (smoothedHandPos - smoothedElbowPos).normalized;
-        return smoothedElbowPos + forearmDir * bicepInsertionDistance;
-    }
+    // Tracking state
+    public bool AllTracked() => shoulderTracked && elbowTracked && handTracked;
 }

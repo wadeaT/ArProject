@@ -3,8 +3,10 @@ using TMPro;
 
 public class InfoPanelController : MonoBehaviour
 {
+    [Header("References")]
     public TMP_Text infoText;
     public ViewModeController modeController;
+    public ArmTracker armTracker;
 
     void Update()
     {
@@ -16,45 +18,76 @@ public class InfoPanelController : MonoBehaviour
 
     void UpdateInfoText()
     {
+        // Get current muscle mode
+        string modeHeader = "";
+        string modeExplanation = "";
+
+        if (armTracker != null)
+        {
+            ArmTracker.MuscleMode mode = armTracker.GetCurrentMuscleMode();
+
+            if (mode == ArmTracker.MuscleMode.Biceps)
+            {
+                modeHeader = "<color=green>💪 BICEPS CURL</color>";
+                modeExplanation =
+                    "<color=red>Red</color> = Weight (↓ gravity)\n" +
+                    "<color=green>Green</color> = Biceps pulls UP\n" +
+                    "Action: Elbow FLEXION";
+            }
+            else
+            {
+                modeHeader = "<color=#AA55FF>💪 TRICEPS PULLDOWN</color>";
+                modeExplanation =
+                    "<color=#5555FF>Blue</color> = Cable (↑ tension)\n" +
+                    "<color=#AA55FF>Purple</color> = Triceps pulls UP\n" +
+                    "Action: Elbow EXTENSION";
+            }
+        }
+
         switch (modeController.currentMode)
         {
             case ViewModeController.ViewMode.Basic:
-                infoText.text =
-                    " <b>Forces & Balance</b>\n\n" +
-                    "<color=#FF6B6B>Red</color> = Weights (gravity pulls down)\n" +
-                    "<color=#4ECDC4>Yellow</color> = Arm weight\n" +
-                    "<color=#95E1D3>Green</color> = Muscle force (bicep pulls up)\n\n" +
-                    "<b>Try This:</b>\n" +
-                    "• Change the weight - what happens?\n" +
-                    "• Why is the muscle force SO large?\n" +
-                    "• Move the arm - does muscle force change?";
+                infoText.text = "💡 <b>Forces & Balance</b>\n" +
+                               modeHeader + "\n\n" +
+                               modeExplanation + "\n\n" +
+                               "<color=yellow>Yellow</color> = Arm weight (↓)\n\n" +
+                               "⚖️ Equilibrium: Σ τ = 0";
                 break;
 
             case ViewModeController.ViewMode.TorqueAnalysis:
-                infoText.text =
-                    " <b>Lever & Torque</b>\n\n" +
-                    "<color=cyan>Cyan lines</color> = lever arms (r⊥)\n" +
-                    "Distance from elbow to force\n" +
-                    "<color=yellow>Yellow curve</color> = rotation direction\n\n" +
-                    "<b>Investigate:</b>\n" +
-                    "• Compare the two lever arm lengths\n" +
-                    "• Torque = Force × Distance\n" +
-                    "• Which creates more torque?\n" +
-                    "• Move arm up/down - what changes?";
+                infoText.text = "💡 <b>Torque Analysis</b>\n" +
+                               modeHeader + "\n\n" +
+                               "<color=cyan>Cyan</color> = Moment arms (r⊥)\n\n" +
+                               "τ = F × r⊥\n\n" +
+                               "🔍 <b>Key insight:</b>\n" +
+                               "Muscle r⊥ ≈ 5 cm (small!)\n" +
+                               "Load r⊥ ≈ 30 cm (large!)\n\n" +
+                               "→ Muscle force is ~6× the load!";
                 break;
 
             case ViewModeController.ViewMode.Advanced:
-                infoText.text =
-                    " <b>Complete Analysis</b>\n\n" +
-                    "<color=red>XYZ</color> axes show 3D space\n" +
-                    "<color=yellow>Gold arrow</color> = torque vector\n" +
-                    "  (points along rotation axis)\n" +
-                    "<color=gray>Gray arrow</color> = joint reaction\n" +
-                    "  (zero torque at pivot)\n\n" +
-                    "<b>Advanced Challenge:</b>\n" +
-                    "• Use right-hand rule for torque\n" +
-                    "• All forces must balance (ΣF = 0)\n" +
-                    "• All torques must balance (Στ = 0)";
+                string resistanceNote = "";
+                if (armTracker != null)
+                {
+                    if (armTracker.GetCurrentMuscleMode() == ArmTracker.MuscleMode.Biceps)
+                    {
+                        resistanceNote = "Weight + Arm weight both\npull DOWN (add together)";
+                    }
+                    else
+                    {
+                        resistanceNote = "Cable pulls UP, Arm weight\npulls DOWN (oppose each other)";
+                    }
+                }
+
+                infoText.text = "💡 <b>Complete Analysis</b>\n" +
+                               modeHeader + "\n\n" +
+                               "<b>4 Forces (FBD):</b>\n" +
+                               "1. Resistance (hand)\n" +
+                               "2. Forearm weight\n" +
+                               "3. Muscle force\n" +
+                               "4. Joint reaction\n\n" +
+                               "<b>Note:</b>\n" +
+                               resistanceNote;
                 break;
         }
     }

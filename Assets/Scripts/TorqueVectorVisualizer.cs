@@ -75,21 +75,41 @@ public class TorqueVectorVisualizer : MonoBehaviour
     void DrawTorqueVector()
     {
         Vector3 elbowPos = armTracker.GetElbowPos();
-        Vector3 shoulderPos = armTracker.GetShoulderPos();
         Vector3 handPos = armTracker.GetHandPos();
 
-        // Calculate the rotation axis (perpendicular to the arm plane)
-        // Using cross product to find perpendicular direction
-        Vector3 upperArm = (elbowPos - shoulderPos).normalized;
-        Vector3 forearm = (handPos - elbowPos).normalized;
+        // ============================================================
+        // TORQUE VECTOR CALCULATION
+        // ============================================================
+        // Torque is calculated as: τ = r × F
+        // Where:
+        //   r = position vector from pivot (elbow) to point of force application
+        //   F = force vector
+        //
+        // For the weight at the hand:
+        //   r = handPos - elbowPos
+        //   F = m * g * (-j) = weight force pointing down
+        //
+        // The cross product gives the direction of the rotation axis
+        // ============================================================
 
-        // Torque direction using right-hand rule
-        // τ = r × F (cross product gives perpendicular vector)
-        Vector3 torqueDirection = Vector3.Cross(forearm, Vector3.down).normalized;
+        // Position vector from elbow to hand
+        Vector3 r = handPos - elbowPos;
 
-        // If cross product gives zero (arm is vertical), use a default direction
-        if (torqueDirection.magnitude < 0.01f)
+        // Force vector (gravity pointing down)
+        Vector3 F = Vector3.down;
+
+        // Torque direction using right-hand rule: τ = r × F
+        // This gives us the axis of rotation
+        Vector3 torqueDirection = Vector3.Cross(r, F);
+
+        // Normalize if we have a valid direction
+        if (torqueDirection.magnitude > 0.001f)
         {
+            torqueDirection.Normalize();
+        }
+        else
+        {
+            // Fallback if arm is vertical
             torqueDirection = Vector3.forward;
         }
 
@@ -98,7 +118,7 @@ public class TorqueVectorVisualizer : MonoBehaviour
 
         // Calculate arrow length based on torque magnitude
         float arrowLength = torqueMagnitude * torqueScale;
-        arrowLength = Mathf.Clamp(arrowLength, 0.05f, 0.4f); // Clamp to reasonable size
+        arrowLength = Mathf.Clamp(arrowLength, 0.05f, 0.4f);
 
         // Draw arrow from elbow along rotation axis
         Vector3 startPos = elbowPos;
@@ -115,9 +135,10 @@ public class TorqueVectorVisualizer : MonoBehaviour
         arrowHead.transform.Rotate(90, 0, 0);
         arrowHead.SetActive(true);
 
-        // Update label
+        // Update label with right-hand rule explanation
         torqueLabel.transform.position = endPos + torqueDirection * 0.05f;
-        torqueLabel.text = $"TORQUE (τ)\n{torqueMagnitude:F1} N⋅m\n(rotation axis)";
+        torqueLabel.text = $"τ (torque)\n{torqueMagnitude:F1} N⋅m\n" +
+                          $"τ = r × F\n(rotation axis)";
         torqueLabel.gameObject.SetActive(true);
     }
 

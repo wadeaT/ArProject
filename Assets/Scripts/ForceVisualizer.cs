@@ -6,30 +6,41 @@ public class ForceVisualizer : MonoBehaviour
     public ArmTracker armTracker;
 
     [Header("Force Arrows")]
-    private ForceArrow handWeightArrow;
-    private ForceArrow forearmWeightArrow;
-    private ForceArrow muscleForceArrow;
-    private ForceArrow jointReactionArrow; // NEW: 4th force for Advanced mode
+    private ForceArrow resistanceArrow;       // Weight (down) or Cable (up)
+    private ForceArrow forearmWeightArrow;    // Always down (gravity)
+    private ForceArrow muscleForceArrow;      // Biceps or Triceps
+    private ForceArrow jointReactionArrow;    // Joint reaction force
 
     [Header("Labels")]
-    private TextMeshPro handWeightLabel;
+    private TextMeshPro resistanceLabel;
     private TextMeshPro forearmWeightLabel;
     private TextMeshPro muscleForceLabel;
-    private TextMeshPro jointReactionLabel; // NEW
+    private TextMeshPro jointReactionLabel;
 
-    [Header("Mode Control")]
-    private bool showJointReaction = false; // Controlled by ViewModeController
+    [Header("Visualization Settings")]
+    public float weightForceScale = 0.005f;
+    public float muscleForceScale = 0.0005f;
+
+    [Header("Colors")]
+    public Color weightColor = Color.red;           // Gravity/weight pulling down
+    public Color cableColor = Color.blue;           // Cable tension pulling up
+    public Color forearmWeightColor = Color.yellow; // Forearm weight (always gravity)
+    public Color bicepsColor = Color.green;
+    public Color tricepsColor = new Color(0.7f, 0.3f, 1f); // Purple
+    public Color jointReactionColor = Color.gray;
+
+    private bool showJointReaction = false;
 
     void Start()
     {
         // Create force arrows
-        handWeightArrow = CreateArrow("HandWeightArrow", Color.red);
-        forearmWeightArrow = CreateArrow("ForearmWeightArrow", Color.yellow);
-        muscleForceArrow = CreateArrow("MuscleForceArrow", Color.green);
-        jointReactionArrow = CreateArrow("JointReactionArrow", new Color(0.5f, 0.5f, 0.5f, 0.7f)); // Gray
+        resistanceArrow = CreateArrow("ResistanceArrow", weightColor);
+        forearmWeightArrow = CreateArrow("ForearmWeightArrow", forearmWeightColor);
+        muscleForceArrow = CreateArrow("MuscleForceArrow", bicepsColor);
+        jointReactionArrow = CreateArrow("JointReactionArrow", jointReactionColor);
 
         // Create labels
-        handWeightLabel = CreateLabel("Hand Weight");
+        resistanceLabel = CreateLabel("Resistance");
         forearmWeightLabel = CreateLabel("Forearm Weight");
         muscleForceLabel = CreateLabel("Muscle Force");
         jointReactionLabel = CreateLabel("Joint Reaction");
@@ -37,7 +48,7 @@ public class ForceVisualizer : MonoBehaviour
 
     void Update()
     {
-        if (armTracker.AllTracked())
+        if (armTracker != null && armTracker.AllTracked())
         {
             DrawForces();
         }
@@ -53,62 +64,109 @@ public class ForceVisualizer : MonoBehaviour
         Vector3 handPos = armTracker.GetHandPos();
         Vector3 forearmCenter = (elbowPos + handPos) / 2f;
 
-        // Scale factors: smaller forces get bigger scale so they're visible
-        float weightScale = 0.005f;  // Weights are small, so bigger scale
-        float muscleScale = 0.001f;  // Muscle force is huge, so smaller scale
+        ArmTracker.MuscleMode mode = armTracker.GetCurrentMuscleMode();
 
-        // ═════════════════════════════════════════════════════════
-        // 1. HAND WEIGHT (downward from hand)
-        // ═════════════════════════════════════════════════════════
-        float handWeightForce = armTracker.GetHandWeightForce();
-        handWeightArrow.DrawArrow(handPos, Vector3.down, handWeightForce, weightScale);
-        UpdateLabel(handWeightLabel, handPos + Vector3.down * 0.08f,
-            $"Hand Weight\n{handWeightForce:F1} N");
+        // ════════════════════════════════════════════════════════════════
+        // 1. RESISTANCE FORCE (Weight DOWN for biceps, Cable UP for triceps)
+        // ════════════════════════════════════════════════════════════════
+        float resistanceForce = armTracker.GetResistanceForce();
+        Vector3 resistanceDirection = armTracker.GetResistanceForceDirection();
 
-        // ═════════════════════════════════════════════════════════
-        // 2. FOREARM WEIGHT (downward from center of forearm)
-        // ═════════════════════════════════════════════════════════
+        // Change color and label based on mode
+        if (mode == ArmTracker.MuscleMode.Biceps)
+        {
+            // Weight pulling DOWN (gravity)
+            resistanceArrow.SetColor(weightColor);
+            resistanceArrow.DrawArrow(handPos, resistanceDirection, resistanceForce, weightForceScale);
+
+            Vector3 resistanceLabelPos = handPos + resistanceDirection * 0.1f;
+            resistanceLabel.color = weightColor;
+            UpdateLabel(resistanceLabel, resistanceLabelPos,
+                $"WEIGHT\n{resistanceForce:F1} N\n↓ Gravity");
+        }
+        else // Triceps
+        {
+            // Cable pulling UP
+            resistanceArrow.SetColor(cableColor);
+            resistanceArrow.DrawArrow(handPos, resistanceDirection, resistanceForce, weightForceScale);
+
+            Vector3 resistanceLabelPos = handPos + resistanceDirection * 0.1f;
+            resistanceLabel.color = cableColor;
+            UpdateLabel(resistanceLabel, resistanceLabelPos,
+                $"CABLE\n{resistanceForce:F1} N\n↑ Tension");
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        // 2. FOREARM WEIGHT (always DOWN - gravity doesn't change!)
+        // ════════════════════════════════════════════════════════════════
         float forearmWeightForce = armTracker.GetForearmWeightForce();
-        forearmWeightArrow.DrawArrow(forearmCenter, Vector3.down, forearmWeightForce, weightScale);
-        UpdateLabel(forearmWeightLabel, forearmCenter + Vector3.down * 0.08f,
+        forearmWeightArrow.DrawArrow(forearmCenter, Vector3.down, forearmWeightForce, weightForceScale);
+
+        Vector3 forearmLabelPos = forearmCenter + Vector3.down * 0.08f;
+        UpdateLabel(forearmWeightLabel, forearmLabelPos,
             $"Arm Weight\n{forearmWeightForce:F1} N");
 
-        // ═════════════════════════════════════════════════════════
-        // 3. MUSCLE FORCE (upward from bicep insertion point)
-        // IMPROVED: Now draws at actual insertion point, not elbow
-        // ═════════════════════════════════════════════════════════
+        // ════════════════════════════════════════════════════════════════
+        // 3. MUSCLE FORCE (direction from ArmTracker)
+        // ════════════════════════════════════════════════════════════════
         float muscleForce = armTracker.GetMuscleForce();
-        Vector3 bicepInsertionPoint = armTracker.GetBicepInsertionPoint();
-        muscleForceArrow.DrawArrow(bicepInsertionPoint, Vector3.up, muscleForce, muscleScale);
-        UpdateLabel(muscleForceLabel, bicepInsertionPoint + Vector3.up * 0.08f,
-            $"BICEP FORCE\n{muscleForce:F1} N");
+        Vector3 muscleDirection = armTracker.GetMuscleForceDirection();
+        Vector3 muscleInsertionPoint = armTracker.GetMuscleInsertionPoint();
 
-        // ═════════════════════════════════════════════════════════
-        // 4. JOINT REACTION FORCE (only in Advanced mode)
-        // This is the force the upper arm exerts on the forearm at elbow
-        // For vertical equilibrium: F_joint + F_muscle = W_hand + W_arm
-        // ═════════════════════════════════════════════════════════
+        // Update color based on muscle mode
+        Color muscleColor = (mode == ArmTracker.MuscleMode.Biceps) ? bicepsColor : tricepsColor;
+        muscleForceArrow.SetColor(muscleColor);
+
+        muscleForceArrow.DrawArrow(muscleInsertionPoint, muscleDirection, muscleForce, muscleForceScale);
+
+        // Label
+        string muscleName = (mode == ArmTracker.MuscleMode.Biceps) ? "BICEPS" : "TRICEPS";
+        string muscleAction = (mode == ArmTracker.MuscleMode.Biceps) ? "Flexion" : "Extension";
+        Vector3 muscleLabelPos = muscleInsertionPoint + muscleDirection * 0.08f;
+        muscleForceLabel.color = muscleColor;
+        UpdateLabel(muscleForceLabel, muscleLabelPos,
+            $"{muscleName}\n{muscleForce:F0} N\n({muscleAction})");
+
+        // ════════════════════════════════════════════════════════════════
+        // 4. JOINT REACTION FORCE (Advanced mode only)
+        // ════════════════════════════════════════════════════════════════
         if (showJointReaction)
         {
-            // Calculate joint reaction force (balances all other vertical forces)
-            float totalDownwardForce = handWeightForce + forearmWeightForce;
-            float jointReactionForce = totalDownwardForce - muscleForce;
-
-            // Joint reaction typically points upward (positive) if muscle force isn't enough
-            // or downward (negative) if muscle force is too much
-            Vector3 jointDirection = jointReactionForce > 0 ? Vector3.up : Vector3.down;
-            float jointMagnitude = Mathf.Abs(jointReactionForce);
-
-            jointReactionArrow.DrawArrow(elbowPos, jointDirection, jointMagnitude, weightScale);
-            UpdateLabel(jointReactionLabel, elbowPos + jointDirection * 0.1f,
-                $"Joint Reaction\n{jointMagnitude:F1} N\n(τ = 0 at pivot)");
+            DrawJointReactionForce(elbowPos, resistanceForce, resistanceDirection,
+                                   forearmWeightForce, muscleForce, muscleDirection);
         }
         else
         {
             jointReactionArrow.SetVisibility(false);
-            if (jointReactionLabel != null)
-                jointReactionLabel.gameObject.SetActive(false);
+            if (jointReactionLabel != null) jointReactionLabel.gameObject.SetActive(false);
         }
+    }
+
+    void DrawJointReactionForce(Vector3 elbowPos, float resistanceForce, Vector3 resistanceDir,
+                                 float forearmWeight, float muscleForce, Vector3 muscleDir)
+    {
+        // ════════════════════════════════════════════════════════════════
+        // JOINT REACTION FORCE (for complete FBD)
+        // ════════════════════════════════════════════════════════════════
+        // For force equilibrium: Σ F = 0
+        // F_joint + F_muscle + F_resistance + W_forearm = 0
+        // F_joint = -(F_muscle + F_resistance + W_forearm)
+        // ════════════════════════════════════════════════════════════════
+
+        Vector3 muscleForceVec = muscleDir * muscleForce;
+        Vector3 resistanceForceVec = resistanceDir * resistanceForce;
+        Vector3 forearmWeightVec = Vector3.down * forearmWeight;
+
+        Vector3 jointReactionVec = -(muscleForceVec + resistanceForceVec + forearmWeightVec);
+        float jointReactionMagnitude = jointReactionVec.magnitude;
+        Vector3 jointReactionDir = jointReactionVec.normalized;
+
+        jointReactionArrow.DrawArrow(elbowPos, jointReactionDir, jointReactionMagnitude, muscleForceScale);
+
+        Vector3 jointLabelPos = elbowPos + jointReactionDir * 0.06f;
+        jointReactionLabel.color = jointReactionColor;
+        UpdateLabel(jointReactionLabel, jointLabelPos,
+            $"Joint Force\n{jointReactionMagnitude:F0} N");
     }
 
     ForceArrow CreateArrow(string name, Color color)
@@ -131,7 +189,6 @@ public class ForceVisualizer : MonoBehaviour
         tmp.alignment = TextAlignmentOptions.Center;
         tmp.color = Color.white;
 
-        // Make it face camera
         labelObj.AddComponent<Billboard>();
 
         return tmp;
@@ -149,20 +206,20 @@ public class ForceVisualizer : MonoBehaviour
 
     void HideAllArrows()
     {
-        handWeightArrow?.SetVisibility(false);
+        resistanceArrow?.SetVisibility(false);
         forearmWeightArrow?.SetVisibility(false);
         muscleForceArrow?.SetVisibility(false);
         jointReactionArrow?.SetVisibility(false);
 
-        if (handWeightLabel != null) handWeightLabel.gameObject.SetActive(false);
+        if (resistanceLabel != null) resistanceLabel.gameObject.SetActive(false);
         if (forearmWeightLabel != null) forearmWeightLabel.gameObject.SetActive(false);
         if (muscleForceLabel != null) muscleForceLabel.gameObject.SetActive(false);
         if (jointReactionLabel != null) jointReactionLabel.gameObject.SetActive(false);
     }
 
-    // ═════════════════════════════════════════════════════════════════
-    // PUBLIC METHOD: Toggle joint reaction force (called by ViewModeController)
-    // ═════════════════════════════════════════════════════════════════
+    // ════════════════════════════════════════════════════════════════
+    // PUBLIC METHOD FOR TOGGLE - Called by ViewModeController
+    // ════════════════════════════════════════════════════════════════
     public void ToggleJointReaction(bool isOn)
     {
         showJointReaction = isOn;

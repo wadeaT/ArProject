@@ -30,3 +30,7 @@
 .DS_Store
 Thumbs.db
 Desktop.ini
+
+Packages/com.ptc.vuforia.engine-11.4.4.tgz
+
+/[Uu]tmp/

@@ -13,7 +13,8 @@ public class CurvedTorqueArrow : MonoBehaviour
     [Header("Settings")]
     public float radius = 0.08f;
     public int curveSegments = 20;
-    public Color arrowColor = Color.yellow;
+    public Color loadTorqueColor = Color.red;      // Color for load torque (weight)
+    public Color muscleTorqueColor = Color.green;  // Color for muscle torque
 
     void Start()
     {
@@ -30,16 +31,16 @@ public class CurvedTorqueArrow : MonoBehaviour
         curvedLine.startWidth = 0.006f;
         curvedLine.endWidth = 0.006f;
         curvedLine.material = new Material(Shader.Find("Sprites/Default"));
-        curvedLine.startColor = arrowColor;
-        curvedLine.endColor = arrowColor;
+        curvedLine.startColor = loadTorqueColor;
+        curvedLine.endColor = loadTorqueColor;
         curvedLine.positionCount = curveSegments;
         curvedLine.useWorldSpace = true;
 
-        // Arrow tip (small cube as arrow head)
+        // Arrow tip (small cone-like shape)
         arrowTip = GameObject.CreatePrimitive(PrimitiveType.Cube);
         arrowTip.transform.SetParent(transform);
         arrowTip.transform.localScale = new Vector3(0.015f, 0.015f, 0.015f);
-        arrowTip.GetComponent<Renderer>().material.color = arrowColor;
+        arrowTip.GetComponent<Renderer>().material.color = loadTorqueColor;
         Destroy(arrowTip.GetComponent<Collider>());
     }
 
@@ -51,7 +52,7 @@ public class CurvedTorqueArrow : MonoBehaviour
         label = labelObj.AddComponent<TextMeshPro>();
         label.fontSize = 0.25f;
         label.alignment = TextAlignmentOptions.Center;
-        label.color = arrowColor;
+        label.color = loadTorqueColor;
 
         labelObj.AddComponent<Billboard>();
     }
@@ -72,30 +73,56 @@ public class CurvedTorqueArrow : MonoBehaviour
     {
         Vector3 elbowPos = armTracker.GetElbowPos();
         Vector3 handPos = armTracker.GetHandPos();
+        Vector3 shoulderPos = armTracker.GetShoulderPos();
 
-        // Calculate direction from elbow to hand (in XZ plane)
-        Vector3 armDirection = handPos - elbowPos;
-        armDirection.y = 0; // Flatten to horizontal plane
+        // ============================================================
+        // ROTATION DIRECTION
+        // ============================================================
+        // The weight creates a torque that would rotate the forearm
+        // in the direction of "opening" the elbow (extension)
+        // 
+        // The muscle creates an opposing torque (flexion for biceps)
+        // 
+        // We visualize the direction the arm would rotate under 
+        // the influence of gravity (the load torque)
+        // ============================================================
 
-        if (armDirection.magnitude < 0.01f)
+        // Calculate the plane of rotation
+        // The rotation happens around an axis perpendicular to the arm plane
+        Vector3 armDirection = (handPos - elbowPos).normalized;
+
+        // Use the cross product to find the rotation axis
+        Vector3 gravityForce = Vector3.down;
+        Vector3 rotationAxis = Vector3.Cross(armDirection, gravityForce).normalized;
+
+        if (rotationAxis.magnitude < 0.01f)
         {
-            HideCurvedArrow();
-            return;
+            // Arm is vertical, use default axis
+            rotationAxis = Vector3.forward;
         }
 
-        armDirection.Normalize();
+        // Calculate start angle in the rotation plane
+        // We draw the arc in the plane perpendicular to the rotation axis
+        Vector3 startDir = armDirection;
 
-        // Draw curved arc around elbow (counter-clockwise when viewed from above)
-        float startAngle = Mathf.Atan2(armDirection.z, armDirection.x);
-        float arcLength = 120f * Mathf.Deg2Rad; // 120 degree arc
+        // Arc parameters
+        float arcAngleDegrees = 90f; // How much of the circle to draw
+        bool clockwise = Vector3.Dot(rotationAxis, Vector3.Cross(armDirection, gravityForce)) > 0;
 
+        // Draw the curved arc
         for (int i = 0; i < curveSegments; i++)
         {
-            float angle = startAngle + (arcLength * i / (curveSegments - 1));
-            float x = elbowPos.x + Mathf.Cos(angle) * radius;
-            float z = elbowPos.z + Mathf.Sin(angle) * radius;
+            float t = (float)i / (curveSegments - 1);
+            float angle = t * arcAngleDegrees * (clockwise ? 1 : -1);
 
-            curvedLine.SetPosition(i, new Vector3(x, elbowPos.y + 0.05f, z));
+            // Rotate around the rotation axis
+            Quaternion rotation = Quaternion.AngleAxis(angle, rotationAxis);
+            Vector3 point = elbowPos + rotation * (startDir * radius);
+
+            // Offset slightly above the arm plane for visibility
+            point += rotationAxis * 0.02f;
+
+            curvedLine.SetPosition(i, point);
         }
 
         curvedLine.enabled = true;
@@ -109,10 +136,15 @@ public class CurvedTorqueArrow : MonoBehaviour
         arrowTip.transform.rotation = Quaternion.LookRotation(tipDirection);
         arrowTip.SetActive(true);
 
-        // Label
-        float torque = armTracker.GetElbowTorque();
+        // Label showing torque value and balance equation
+        float loadTorque = armTracker.GetElbowTorque();
+        float muscleForce = armTracker.GetMuscleForce();
+
         label.transform.position = elbowPos + Vector3.up * 0.12f;
-        label.text = $"↻ Torque\n{torque:F1} N⋅m";
+        label.text = $"↻ Load Torque\n" +
+                    $"τ = {loadTorque:F1} N⋅m\n\n" +
+                    $"⚖️ Balance:\n" +
+                    $"τ_load + τ_muscle = 0";
         label.gameObject.SetActive(true);
     }
 
