@@ -1,7 +1,11 @@
 ﻿using UnityEngine;
 
 /// <summary>
-/// Controls Tripo AI arm models - positions and scales them to match tracked markers.
+/// IMPROVED TripoArmController - Now supports SEPARATE scales for upper arm and forearm!
+/// 
+/// Changes from original:
+/// - Added upperArmScaleMultiplier and forearmScaleMultiplier
+/// - globalScaleMultiplier now acts as a base that individual scales multiply
 /// </summary>
 public class TripoArmController : MonoBehaviour
 {
@@ -15,25 +19,68 @@ public class TripoArmController : MonoBehaviour
     [Tooltip("Check this if you have ONE model for the entire arm")]
     public bool useSingleArmModel = false;
 
+    [Header("═══ MODEL PIVOT LOCATION ═══")]
+    [Tooltip("Where is the model's pivot/origin point?")]
+    public PivotLocation upperArmPivot = PivotLocation.Center;
+    public PivotLocation forearmPivot = PivotLocation.Center;
+
+    public enum PivotLocation
+    {
+        Center,
+        TopEnd,
+        BottomEnd
+    }
+
     [Header("═══ UPPER ARM ALIGNMENT ═══")]
     public ModelEnd upperArmTopEnd = ModelEnd.PositiveY;
     public Vector3 upperArmRotationFix = Vector3.zero;
-    public Vector3 upperArmPositionOffset = Vector3.zero;
+
+    [Tooltip("Position offset as PROPORTION of segment length (0.1 = 10% offset)")]
+    public Vector3 upperArmProportionalOffset = Vector3.zero;
+
+    [Tooltip("Fixed offset in meters (use sparingly - only for fine-tuning)")]
+    public Vector3 upperArmFixedOffset = Vector3.zero;
 
     [Header("═══ FOREARM ALIGNMENT ═══")]
     public ModelEnd forearmTopEnd = ModelEnd.PositiveY;
     public Vector3 forearmRotationFix = Vector3.zero;
-    public Vector3 forearmPositionOffset = Vector3.zero;
+
+    [Tooltip("Position offset as PROPORTION of segment length (0.1 = 10% offset)")]
+    public Vector3 forearmProportionalOffset = Vector3.zero;
+
+    [Tooltip("Fixed offset in meters (use sparingly - only for fine-tuning)")]
+    public Vector3 forearmFixedOffset = Vector3.zero;
 
     [Header("═══ SCALE ═══")]
+    [Tooltip("Base scale multiplier for both models")]
     [Range(0.1f, 200f)]
-    public float globalScaleMultiplier = 50f;
+    public float globalScaleMultiplier = 1f;
 
+    [Tooltip("Additional scale multiplier for UPPER ARM only")]
     [Range(0.1f, 10f)]
-    public float thicknessMultiplier = 3f;
+    public float upperArmScaleMultiplier = 1f;
 
-    [Range(-0.1f, 0.1f)]
-    public float lengthAdjustment = 0.0f;
+    [Tooltip("Additional scale multiplier for FOREARM only")]
+    [Range(0.1f, 10f)]
+    public float forearmScaleMultiplier = 1f;
+
+    [Tooltip("Thickness relative to length (1.0 = natural proportions)")]
+    [Range(0.1f, 5f)]
+    public float thicknessRatio = 1f;
+
+    [Tooltip("Additional thickness multiplier")]
+    [Range(0.1f, 10f)]
+    public float thicknessMultiplier = 1f;
+
+    [Tooltip("Auto-scale thickness based on arm length")]
+    public bool autoScaleThickness = true;
+
+    [Tooltip("Reference arm length for thickness scaling (meters)")]
+    public float referenceArmLength = 0.3f;
+
+    [Range(-0.5f, 0.5f)]
+    [Tooltip("Length adjustment as proportion (-0.1 = 10% shorter, 0.1 = 10% longer)")]
+    public float lengthAdjustmentProportion = 0.0f;
 
     [Header("═══ APPEARANCE ═══")]
     public bool showModels = true;
@@ -44,6 +91,9 @@ public class TripoArmController : MonoBehaviour
     [Header("═══ SMOOTHING ═══")]
     [Range(0.01f, 0.3f)]
     public float smoothing = 0.1f;
+
+    [Header("═══ DEBUG ═══")]
+    public bool showDebugInfo = false;
 
     public enum ModelEnd
     {
@@ -70,6 +120,10 @@ public class TripoArmController : MonoBehaviour
     private float upperArmModelLength;
     private float forearmModelLength;
 
+    // Current segment lengths
+    private float currentUpperArmLength;
+    private float currentForearmLength;
+
     void Start()
     {
         AnalyzeModels();
@@ -87,7 +141,6 @@ public class TripoArmController : MonoBehaviour
             size.y *= upperArmOriginalScale.y;
             size.z *= upperArmOriginalScale.z;
 
-            // Find longest axis
             if (size.x >= size.y && size.x >= size.z)
                 upperArmLengthAxis = 0;
             else if (size.y >= size.x && size.y >= size.z)
@@ -96,6 +149,9 @@ public class TripoArmController : MonoBehaviour
                 upperArmLengthAxis = 2;
 
             upperArmModelLength = size[upperArmLengthAxis];
+
+            if (showDebugInfo)
+                Debug.Log($"Upper arm model: length axis={upperArmLengthAxis}, length={upperArmModelLength:F4}");
         }
 
         if (forearmModel != null)
@@ -115,6 +171,9 @@ public class TripoArmController : MonoBehaviour
                 forearmLengthAxis = 2;
 
             forearmModelLength = size[forearmLengthAxis];
+
+            if (showDebugInfo)
+                Debug.Log($"Forearm model: length axis={forearmLengthAxis}, length={forearmModelLength:F4}");
         }
     }
 
@@ -198,16 +257,25 @@ public class TripoArmController : MonoBehaviour
     {
         if (upperArmModel == null) return;
 
+        Vector3 shoulder = armTracker.GetShoulderPos();
+        Vector3 hand = armTracker.GetHandPos();
+
+        currentUpperArmLength = Vector3.Distance(shoulder, hand);
+
         StretchModelBetweenPoints(
             upperArmModel,
-            armTracker.GetShoulderPos(),
-            armTracker.GetHandPos(),
+            shoulder,
+            hand,
             upperArmLengthAxis,
             upperArmOriginalScale,
             upperArmModelLength,
             upperArmTopEnd,
+            upperArmPivot,
             upperArmRotationFix,
-            upperArmPositionOffset,
+            upperArmProportionalOffset,
+            upperArmFixedOffset,
+            currentUpperArmLength,
+            globalScaleMultiplier * upperArmScaleMultiplier, // Combined scale
             ref smoothedUpperPos,
             ref smoothedUpperRot
         );
@@ -217,16 +285,25 @@ public class TripoArmController : MonoBehaviour
     {
         if (upperArmModel == null) return;
 
+        Vector3 shoulder = armTracker.GetShoulderPos();
+        Vector3 elbow = armTracker.GetElbowPos();
+
+        currentUpperArmLength = Vector3.Distance(shoulder, elbow);
+
         StretchModelBetweenPoints(
             upperArmModel,
-            armTracker.GetShoulderPos(),
-            armTracker.GetElbowPos(),
+            shoulder,
+            elbow,
             upperArmLengthAxis,
             upperArmOriginalScale,
             upperArmModelLength,
             upperArmTopEnd,
+            upperArmPivot,
             upperArmRotationFix,
-            upperArmPositionOffset,
+            upperArmProportionalOffset,
+            upperArmFixedOffset,
+            currentUpperArmLength,
+            globalScaleMultiplier * upperArmScaleMultiplier, // Combined scale
             ref smoothedUpperPos,
             ref smoothedUpperRot
         );
@@ -236,16 +313,25 @@ public class TripoArmController : MonoBehaviour
     {
         if (forearmModel == null) return;
 
+        Vector3 elbow = armTracker.GetElbowPos();
+        Vector3 hand = armTracker.GetHandPos();
+
+        currentForearmLength = Vector3.Distance(elbow, hand);
+
         StretchModelBetweenPoints(
             forearmModel,
-            armTracker.GetElbowPos(),
-            armTracker.GetHandPos(),
+            elbow,
+            hand,
             forearmLengthAxis,
             forearmOriginalScale,
             forearmModelLength,
             forearmTopEnd,
+            forearmPivot,
             forearmRotationFix,
-            forearmPositionOffset,
+            forearmProportionalOffset,
+            forearmFixedOffset,
+            currentForearmLength,
+            globalScaleMultiplier * forearmScaleMultiplier, // Combined scale
             ref smoothedForearmPos,
             ref smoothedForearmRot
         );
@@ -259,20 +345,46 @@ public class TripoArmController : MonoBehaviour
         Vector3 originalScale,
         float modelLength,
         ModelEnd topEnd,
+        PivotLocation pivotLocation,
         Vector3 rotationFix,
-        Vector3 positionOffset,
+        Vector3 proportionalOffset,
+        Vector3 fixedOffset,
+        float segmentLength,
+        float scaleMultiplier, // NEW: individual scale
         ref Vector3 smoothedPos,
         ref Quaternion smoothedRot)
     {
         Vector3 direction = (endPoint - startPoint).normalized;
-        float targetLength = Vector3.Distance(startPoint, endPoint) + lengthAdjustment;
-        Vector3 centerPos = (startPoint + endPoint) / 2f;
+        float targetLength = segmentLength * (1f + lengthAdjustmentProportion);
 
-        // Smooth position
-        if (smoothedPos == Vector3.zero) smoothedPos = centerPos;
-        smoothedPos = Vector3.Lerp(smoothedPos, centerPos, 1f - smoothing);
+        // POSITION
+        Vector3 basePosition;
+        switch (pivotLocation)
+        {
+            case PivotLocation.TopEnd:
+                basePosition = startPoint;
+                break;
+            case PivotLocation.BottomEnd:
+                basePosition = endPoint;
+                break;
+            case PivotLocation.Center:
+            default:
+                basePosition = (startPoint + endPoint) / 2f;
+                break;
+        }
 
-        // Calculate rotation
+        Vector3 scaledProportionalOffset = new Vector3(
+            proportionalOffset.x * segmentLength,
+            proportionalOffset.y * segmentLength,
+            proportionalOffset.z * segmentLength
+        );
+
+        Vector3 targetPos = basePosition + scaledProportionalOffset + fixedOffset;
+
+        if (smoothedPos == Vector3.zero) smoothedPos = targetPos;
+        smoothedPos = Vector3.Lerp(smoothedPos, targetPos, 1f - smoothing);
+
+        // ROTATION
         Vector3 modelAxis = GetAxisVector(lengthAxis, IsPositiveEnd(topEnd));
         Quaternion alignRotation = Quaternion.FromToRotation(modelAxis, direction);
         Quaternion fixRotation = Quaternion.Euler(rotationFix);
@@ -280,24 +392,40 @@ public class TripoArmController : MonoBehaviour
 
         smoothedRot = Quaternion.Slerp(smoothedRot, targetRot, 1f - smoothing);
 
-        // Apply transforms
         model.rotation = smoothedRot;
-        model.position = smoothedPos + positionOffset;
+        model.position = smoothedPos;
 
-        // Calculate scale
+        // SCALE - using individual scaleMultiplier
         if (modelLength <= 0.001f) modelLength = 0.1f;
         float lengthScale = targetLength / modelLength;
 
-        Vector3 newScale = originalScale * globalScaleMultiplier;
+        float effectiveThickness = thicknessMultiplier;
+
+        if (autoScaleThickness && referenceArmLength > 0.01f)
+        {
+            float armSizeRatio = segmentLength / referenceArmLength;
+            effectiveThickness *= armSizeRatio * thicknessRatio;
+        }
+        else
+        {
+            effectiveThickness *= thicknessRatio;
+        }
+
+        Vector3 newScale = originalScale * scaleMultiplier; // Use individual scale
         newScale[lengthAxis] *= lengthScale;
 
         for (int i = 0; i < 3; i++)
         {
             if (i != lengthAxis)
-                newScale[i] *= thicknessMultiplier;
+                newScale[i] *= effectiveThickness;
         }
 
         model.localScale = newScale;
+
+        if (showDebugInfo)
+        {
+            Debug.Log($"Segment: {segmentLength:F3}m, Scale: {newScale}, ScaleMult: {scaleMultiplier:F2}");
+        }
     }
 
     Vector3 GetAxisVector(int axis, bool positive)
@@ -328,16 +456,29 @@ public class TripoArmController : MonoBehaviour
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // PUBLIC METHOD - Connect this to your UI Toggle!
+    // PUBLIC METHODS
     // ═══════════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// Toggle skin visibility - connect to UI Toggle's OnValueChanged
-    /// </summary>
     public void ToggleSkin(bool isOn)
     {
         showModels = isOn;
         SetVisibility(isOn && armTracker != null && armTracker.AllTracked());
         Debug.Log($"Skin display: {(isOn ? "ON" : "OFF")}");
+    }
+
+    public float GetUpperArmLength() => currentUpperArmLength;
+    public float GetForearmLength() => currentForearmLength;
+
+    // Backward compatibility
+    public Vector3 upperArmPositionOffset
+    {
+        get => upperArmProportionalOffset;
+        set => upperArmProportionalOffset = value;
+    }
+
+    public Vector3 forearmPositionOffset
+    {
+        get => forearmProportionalOffset;
+        set => forearmProportionalOffset = value;
     }
 }

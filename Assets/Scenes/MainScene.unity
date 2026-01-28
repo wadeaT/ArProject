@@ -189,9 +189,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ae97b7ef7071a2b458e568e506eca951, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::LeverArmVisualizer
-  armTracker: {fileID: 608191114}
-  handLeverLine: {fileID: 0}
-  forearmLeverLine: {fileID: 0}
 --- !u!114 &48187648
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1443,15 +1440,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: c3aa49783abdec140ad8550297a1a77f, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1.5
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c3aa49783abdec140ad8550297a1a77f, type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.5
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c3aa49783abdec140ad8550297a1a77f, type: 3}
       propertyPath: m_LocalScale.z
-      value: 4
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c3aa49783abdec140ad8550297a1a77f, type: 3}
       propertyPath: m_LocalPosition.x
@@ -3059,7 +3056,7 @@ MonoBehaviour:
   bicepInsertionDistance: 0.05
   tricepInsertionDistance: 0.02
   currentMuscleMode: 0
-  smoothingFactor: 0.3
+  smoothingFactor: 0.4
 --- !u!4 &608191115
 Transform:
   m_ObjectHideFlags: 0
@@ -3719,7 +3716,7 @@ MonoBehaviour:
   armTracker: {fileID: 608191114}
   bicepsToggle: {fileID: 1217328616}
   tricepsToggle: {fileID: 316837969}
-  modeLabel: {fileID: 0}
+  modeLabel: {fileID: 1728596828}
   resistanceLabel: {fileID: 531721543}
   modeIndicator: {fileID: 0}
   bicepsIndicatorColor: {r: 0.2, g: 0.8, b: 0.2, a: 0.3}
@@ -4096,15 +4093,15 @@ PrefabInstance:
     m_Modifications:
     - target: {fileID: -8679921383154817045, guid: c167e6a2f36c5ed4eb239c6c7f687239, type: 3}
       propertyPath: m_LocalScale.x
-      value: 1.5
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c167e6a2f36c5ed4eb239c6c7f687239, type: 3}
       propertyPath: m_LocalScale.y
-      value: 1.5
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c167e6a2f36c5ed4eb239c6c7f687239, type: 3}
       propertyPath: m_LocalScale.z
-      value: 4
+      value: 1
       objectReference: {fileID: 0}
     - target: {fileID: -8679921383154817045, guid: c167e6a2f36c5ed4eb239c6c7f687239, type: 3}
       propertyPath: m_LocalPosition.x
@@ -4948,6 +4945,70 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1349449475
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1349449477}
+  - component: {fileID: 1349449478}
+  - component: {fileID: 1349449479}
+  m_Layer: 0
+  m_Name: GameObject
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1349449477
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1349449475}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 931.5147, y: 302.9385, z: -335.44623}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1349449478
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1349449475}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f28c8301a39c57345b5212997a5b34ba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SimpleSkinController
+--- !u!114 &1349449479
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1349449475}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4a7e2906a6e19ff4094a68ca0da74ca5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::SimpleModelAdjuster
+  tripoController: {fileID: 2004715162}
+  toggleButton: {fileID: 0}
+  slidersPanel: {fileID: 0}
+  buttonMarginRight: 10
+  buttonMarginBottom: 60
+  defaultScale: 1
+  defaultThickness: 1
 --- !u!1 &1393644107
 GameObject:
   m_ObjectHideFlags: 0
@@ -7125,18 +7186,26 @@ MonoBehaviour:
   upperArmModel: {fileID: 862462575}
   forearmModel: {fileID: 257519520}
   useSingleArmModel: 0
+  upperArmPivot: 0
+  forearmPivot: 0
   upperArmTopEnd: 0
   upperArmRotationFix: {x: 180, y: 11, z: 0}
-  upperArmPositionOffset: {x: 0.11, y: -0.19, z: 0.066}
+  upperArmProportionalOffset: {x: 0, y: 0, z: 0}
+  upperArmFixedOffset: {x: 0, y: 0, z: 0}
   forearmTopEnd: 0
   forearmRotationFix: {x: -180, y: 0, z: 0}
-  forearmPositionOffset: {x: 0.178, y: -0.033, z: 0.2}
+  forearmProportionalOffset: {x: 0, y: 0, z: 0}
+  forearmFixedOffset: {x: 0, y: 0, z: 0}
   globalScaleMultiplier: 1
+  thicknessRatio: 1
   thicknessMultiplier: 9
-  lengthAdjustment: 0
+  autoScaleThickness: 1
+  referenceArmLength: 0.3
+  lengthAdjustmentProportion: 0
   showModels: 1
   opacity: 0.8
   smoothing: 0.1
+  showDebugInfo: 0
 --- !u!1 &2005881272
 GameObject:
   m_ObjectHideFlags: 0
@@ -7681,3 +7750,4 @@ SceneRoots:
   - {fileID: 1510473883}
   - {fileID: 2040097671}
   - {fileID: 1302140997}
+  - {fileID: 1349449477}

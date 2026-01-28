@@ -1,6 +1,6 @@
-using UnityEngine;
-using UnityEngine.UI; // Required for Button
-using TMPro; // Required for TextMeshPro
+﻿using UnityEngine;
+using UnityEngine.UI;
+using TMPro;
 using System.Collections.Generic;
 
 public class QuizManager : MonoBehaviour
@@ -8,8 +8,14 @@ public class QuizManager : MonoBehaviour
     [Header("UI Elements")]
     public TextMeshProUGUI questionText;
     public Button[] answerButtons;
-    public TextMeshProUGUI feedbackText; // To show "Correct!" or "Wrong"
-    public GameObject restartButton; // Button to restart or go back
+    public TextMeshProUGUI feedbackText;
+    public GameObject restartButton;
+    public GameObject Back2MainSceneButton;
+
+    [Header("Button Colors")]
+    public Color defaultButtonColor = Color.white;
+    public Color correctColor = Color.green;
+    public Color wrongColor = Color.red;
 
     private List<Question> questions;
     private int currentQuestionIndex = 0;
@@ -34,20 +40,25 @@ public class QuizManager : MonoBehaviour
 
         Question q = questions[currentQuestionIndex];
         questionText.text = q.questionText;
-        feedbackText.text = ""; // Clear previous feedback
+        feedbackText.text = "";
 
         for (int i = 0; i < answerButtons.Length; i++)
         {
             // Update button text
             answerButtons[i].GetComponentInChildren<TextMeshProUGUI>().text = q.answers[i];
 
+            // ═══════════════════════════════════════════════════════════════
+            // FIX: Reset button color to default for each new question!
+            // ═══════════════════════════════════════════════════════════════
+            answerButtons[i].image.color = defaultButtonColor;
+
             // Re-enable button
             answerButtons[i].interactable = true;
 
-            // Remove old listeners to avoid stacking calls
+            // Remove old listeners
             answerButtons[i].onClick.RemoveAllListeners();
 
-            // Add new listener (closure fix)
+            // Add new listener
             int index = i;
             answerButtons[i].onClick.AddListener(() => OnAnswerClicked(index));
         }
@@ -63,16 +74,17 @@ public class QuizManager : MonoBehaviour
         {
             score++;
             feedbackText.text = "<color=green>Correct!</color>";
+            answerButtons[index].image.color = correctColor;
         }
         else
         {
             feedbackText.text = "<color=red>Wrong!</color> The answer was: " + q.answers[q.correctAnswerIndex];
+            answerButtons[index].image.color = wrongColor;
+            // Also highlight the correct answer
+            answerButtons[q.correctAnswerIndex].image.color = correctColor;
         }
 
-        // Disable buttons so user can't click twice
         foreach (var btn in answerButtons) btn.interactable = false;
-
-        // Wait 2 seconds then go to next question
         Invoke("NextQuestion", 2f);
     }
 
@@ -88,16 +100,15 @@ public class QuizManager : MonoBehaviour
         questionText.text = "Quiz Completed!";
         feedbackText.text = $"Your Score: {score} / {questions.Count}";
 
-        // Hide answer buttons
         foreach (var btn in answerButtons) btn.gameObject.SetActive(false);
-
-        // Show restart button
         restartButton.SetActive(true);
+        Back2MainSceneButton.SetActive(true);
     }
 
     public void RestartQuiz()
     {
-        // Simple way: reload the scene
-        UnityEngine.SceneManagement.SceneManager.LoadScene(UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
+        UnityEngine.SceneManagement.SceneManager.LoadScene(
+            UnityEngine.SceneManagement.SceneManager.GetActiveScene().name);
     }
+
 }

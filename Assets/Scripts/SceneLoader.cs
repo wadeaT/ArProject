@@ -15,4 +15,5 @@ public class SceneLoader : MonoBehaviour
     {
         SceneManager.LoadScene(0); // Assuming AR scene is at index 0
     }
+
 }

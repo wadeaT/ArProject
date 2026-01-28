@@ -4,16 +4,7 @@ using TMPro;
 
 /// <summary>
 /// Controls switching between Biceps (curl) and Triceps (pulldown) modes.
-/// 
-/// BICEPS MODE (Curl):
-///   - Resistance = Weight pulling DOWN (gravity)
-///   - Muscle = Biceps pulling toward shoulder (flexion)
-///   - Example: Bicep curl with dumbbell
-///
-/// TRICEPS MODE (Pulldown):
-///   - Resistance = Cable pulling UP (tension)
-///   - Muscle = Triceps pulling toward shoulder (extension)
-///   - Example: Cable pulldown exercise
+/// DEBUG VERSION - Extra logging to find the issue
 /// </summary>
 public class MuscleModeController : MonoBehaviour
 {
@@ -24,7 +15,7 @@ public class MuscleModeController : MonoBehaviour
     public Toggle bicepsToggle;
     public Toggle tricepsToggle;
     public TMP_Text modeLabel;
-    public TMP_Text resistanceLabel; // Shows "Weight ↓" or "Cable ↑"
+    public TMP_Text resistanceLabel;
 
     [Header("Visual Feedback")]
     public Image modeIndicator;
@@ -33,14 +24,42 @@ public class MuscleModeController : MonoBehaviour
 
     void Start()
     {
+        Debug.Log("═══ MuscleModeController START ═══");
+
+        // Check references
+        if (armTracker == null)
+        {
+            Debug.LogError("MuscleModeController: armTracker is NULL! Drag ArmTracker to Inspector!");
+            // Try to find it automatically
+            armTracker = FindObjectOfType<ArmTracker>();
+            if (armTracker != null)
+            {
+                Debug.Log("MuscleModeController: Found ArmTracker automatically!");
+            }
+        }
+        else
+        {
+            Debug.Log("MuscleModeController: armTracker is assigned ✓");
+        }
+
         if (bicepsToggle != null)
         {
             bicepsToggle.onValueChanged.AddListener(OnBicepsToggleChanged);
+            Debug.Log("MuscleModeController: Biceps toggle connected ✓");
+        }
+        else
+        {
+            Debug.LogWarning("MuscleModeController: bicepsToggle is NULL!");
         }
 
         if (tricepsToggle != null)
         {
             tricepsToggle.onValueChanged.AddListener(OnTricepsToggleChanged);
+            Debug.Log("MuscleModeController: Triceps toggle connected ✓");
+        }
+        else
+        {
+            Debug.LogWarning("MuscleModeController: tricepsToggle is NULL!");
         }
 
         // Initialize to biceps mode
@@ -48,39 +67,57 @@ public class MuscleModeController : MonoBehaviour
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // PUBLIC METHODS - Call from UI buttons or toggles
+    // PUBLIC METHODS
     // ═══════════════════════════════════════════════════════════════
 
-    /// <summary>
-    /// BICEPS MODE: Simulates a bicep curl
-    /// - Weight in hand pulls DOWN (gravity)
-    /// - Biceps muscle resists by pulling UP toward shoulder
-    /// </summary>
     public void SetBicepsMode()
     {
+        Debug.Log(">>> SetBicepsMode() called");
+
         if (armTracker != null)
         {
+            Debug.Log(">>> Calling armTracker.SetBicepsMode()");
             armTracker.SetBicepsMode();
+            Debug.Log($">>> ArmTracker mode is now: {armTracker.GetCurrentMuscleMode()}");
+        }
+        else
+        {
+            Debug.LogError(">>> armTracker is NULL - cannot set mode!");
+            // Try to find it
+            armTracker = FindObjectOfType<ArmTracker>();
+            if (armTracker != null)
+            {
+                Debug.Log(">>> Found ArmTracker, retrying...");
+                armTracker.SetBicepsMode();
+            }
         }
 
         UpdateUI(ArmTracker.MuscleMode.Biceps);
-        Debug.Log("BICEPS MODE: Curl - Weight pulls DOWN, Biceps pulls UP");
     }
 
-    /// <summary>
-    /// TRICEPS MODE: Simulates a cable pulldown
-    /// - Cable attached above pulls hand UP (tension)
-    /// - Triceps muscle pushes DOWN to extend elbow
-    /// </summary>
     public void SetTricepsMode()
     {
+        Debug.Log(">>> SetTricepsMode() called");
+
         if (armTracker != null)
         {
+            Debug.Log(">>> Calling armTracker.SetTricepsMode()");
             armTracker.SetTricepsMode();
+            Debug.Log($">>> ArmTracker mode is now: {armTracker.GetCurrentMuscleMode()}");
+        }
+        else
+        {
+            Debug.LogError(">>> armTracker is NULL - cannot set mode!");
+            // Try to find it
+            armTracker = FindObjectOfType<ArmTracker>();
+            if (armTracker != null)
+            {
+                Debug.Log(">>> Found ArmTracker, retrying...");
+                armTracker.SetTricepsMode();
+            }
         }
 
         UpdateUI(ArmTracker.MuscleMode.Triceps);
-        Debug.Log("TRICEPS MODE: Pulldown - Cable pulls UP, Triceps pushes DOWN");
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -89,11 +126,13 @@ public class MuscleModeController : MonoBehaviour
 
     private void OnBicepsToggleChanged(bool isOn)
     {
+        Debug.Log($">>> OnBicepsToggleChanged: isOn = {isOn}");
         if (isOn) SetBicepsMode();
     }
 
     private void OnTricepsToggleChanged(bool isOn)
     {
+        Debug.Log($">>> OnTricepsToggleChanged: isOn = {isOn}");
         if (isOn) SetTricepsMode();
     }
 
@@ -117,7 +156,6 @@ public class MuscleModeController : MonoBehaviour
             }
         }
 
-        // Show resistance direction
         if (resistanceLabel != null)
         {
             if (mode == ArmTracker.MuscleMode.Biceps)
@@ -143,6 +181,26 @@ public class MuscleModeController : MonoBehaviour
         {
             bicepsToggle.SetIsOnWithoutNotify(mode == ArmTracker.MuscleMode.Biceps);
             tricepsToggle.SetIsOnWithoutNotify(mode == ArmTracker.MuscleMode.Triceps);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // DEBUG - Check status every frame (can be removed after debugging)
+    // ═══════════════════════════════════════════════════════════════
+
+    void Update()
+    {
+        // Press M key to manually check and log status
+        if (Input.GetKeyDown(KeyCode.M))
+        {
+            Debug.Log("═══ MANUAL STATUS CHECK ═══");
+            Debug.Log($"armTracker assigned: {armTracker != null}");
+            if (armTracker != null)
+            {
+                Debug.Log($"Current muscle mode: {armTracker.GetCurrentMuscleMode()}");
+            }
+            Debug.Log($"bicepsToggle assigned: {bicepsToggle != null}");
+            Debug.Log($"tricepsToggle assigned: {tricepsToggle != null}");
         }
     }
 }
